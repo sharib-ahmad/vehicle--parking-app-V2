@@ -9,21 +9,19 @@ class Config:
     DEBUG = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     RESTX_MASK_SWAGGER = False
+    
+    # --- Base JWT Configuration ---
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    JWT_TOKEN_LOCATION = ["headers", "cookies"]
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
+    # Enable CSRF protection globally as it's a critical security feature.
+    JWT_COOKIE_CSRF_PROTECT = True
 
 class LocalDevelopmentConfig(Config):
     """Development configuration."""
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-
-    # --- JWT Configuration ---
-    JWT_TOKEN_LOCATION = ["headers", "cookies"]
+    # In development, cookies can be sent over HTTP.
     JWT_COOKIE_SECURE = False 
-    JWT_COOKIE_CSRF_PROTECT = True 
-    
-    # Access token is valid for 15 minutes.
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
-    
-    # Refresh token allows for re-authentication for up to 7 days.
-    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
 

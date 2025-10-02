@@ -36,11 +36,17 @@
             <li class="nav-item">
               <router-link :to="{ name: 'UserManagement' }" class="nav-link" @click="closeMobileMenu">User Management</router-link>
             </li>
+            <li class="nav-item">
+              <router-link :to="{ name: 'AdminSummary'}" class="nav-link" @click="closeMobileMenu">Summary</router-link>
+              </li>
             </template>
             <template v-else>
-            <li class="nav-item">
-              <router-link :to="{ name: 'UserDashboard' }" class="nav-link" @click="closeMobileMenu">Dashboard</router-link>
-            </li>
+              <li class="nav-item">
+                <router-link :to="{ name: 'UserDashboard' }" class="nav-link" @click="closeMobileMenu">Dashboard</router-link>
+              </li>
+              <li class="nav-item">
+                <router-link :to="{ name: 'UserSummary' }" class="nav-link" @click="closeMobileMenu">Summary</router-link>
+              </li>
             </template>
             <li class="nav-item dropdown" ref="profileDropdown">
               <div 
@@ -290,3 +296,4 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.3);
 }
 </style>
+

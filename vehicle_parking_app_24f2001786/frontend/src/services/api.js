@@ -22,14 +22,13 @@ api.interceptors.request.use(
   (config) => {
     const auth = useAuthStore();
     
-    // Add the short-lived access token header if it exists.
-    if (auth.token) {
+    // Only add the Authorization header if the request is NOT for refreshing the token.
+    if (auth.token && !config.url.endsWith('/auth/refresh')) {
       config.headers.Authorization = `Bearer ${auth.token}`;
     }
 
-    // FIX: Read the CSRF token from the cookie and add it to the required header.
-    // This is necessary for all requests that use the refresh token (e.g., /auth/refresh).
-    // The default cookie name for the refresh token's CSRF is 'csrf_refresh_token'.
+    // Always add the CSRF token for requests that use the refresh cookie.
+    // This is crucial for /auth/refresh and /auth/logout.
     const csrfToken = getCookie('csrf_refresh_token');
     if (csrfToken) {
       config.headers['X-CSRF-TOKEN'] = csrfToken;

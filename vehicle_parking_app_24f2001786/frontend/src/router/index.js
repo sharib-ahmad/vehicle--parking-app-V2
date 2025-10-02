@@ -4,8 +4,11 @@ import Login from '@/components/auth/Login.vue'
 import Home from '@/components/Home.vue'
 import AdminDashboard from '@/components/admin/AdminDashboard.vue'
 import AdminSearch from '@/components/admin/AdminSearch.vue'
+import AdminSummary from '@/components/admin/AdminSummary.vue'
 import UserManagement from '@/components/admin/UserManagement.vue'
 import UserDashboard from '@/components/user/UserDashboard.vue'
+import UserSummary from '@/components/user/UserSummary.vue'
+import PaymentPage from '@/components/user/PaymentPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 
@@ -46,9 +49,28 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/admin/summary',
+    name: 'AdminSummary',
+    component: AdminSummary,
+    meta: { requiresAuth: true, requiresAdmin: true } 
+  },
+  {
     path: '/user/dashboard',
     name: 'UserDashboard',
     component: UserDashboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/user/summary',
+    name: 'UserSummary',
+    component: UserSummary,
+    meta: { requiresAuth: true }
+  },
+    {
+    path: '/payment/:reservationId',
+    name: 'PaymentPage',
+    component: PaymentPage,
+    props: true,
     meta: { requiresAuth: true }
   },
 ]
