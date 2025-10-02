@@ -55,6 +55,7 @@ const showFormModal = ref(false);
 const fetchParkingLots = async () => {
   isLoading.value = true;
   error.value = null;
+
   try {
     const response = await api.get('/admin/parking-lots');
     parkingLots.value = response.data;
@@ -82,4 +83,5 @@ const onLotSaved = () => {
   closeFormModal();
   fetchParkingLots();
 };
+
 </script>
