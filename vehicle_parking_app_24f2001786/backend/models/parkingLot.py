@@ -61,6 +61,7 @@ def parking_lot_get_model(ns):
         "close_time": fields.String(description="Close Time"),
         "is_active": fields.Boolean(description="Is Active"),
         "revenue": fields.Float(description="Revenue"),
+        "occupied_spots": fields.Integer(description="Occupied Spot"),
         "parking_spots": fields.List(fields.Nested(parking_spot_get_model(ns)), description="Parking Spots"),
     })
 
