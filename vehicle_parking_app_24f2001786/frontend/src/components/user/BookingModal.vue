@@ -116,7 +116,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from "vue";
+import { ref, reactive, onMounted, watch, computed } from "vue";
 import api from "@/services/api";
 import { useNotificationStore } from "@/stores/notification";
 import { useAuthStore } from "@/stores/auth";
@@ -134,11 +134,25 @@ const vehicleFound = ref(false);
 const isFetchingVehicle = ref(false);
 let debounceTimer = null;
 
+const sortedSpots = computed(() => {
+  return [...props.lot.parking_spots].sort((a, b) => {
+    const [lotA, spotA] = a.spot_number.split("-").map(Number);
+    const [lotB, spotB] = b.spot_number.split("-").map(Number);
+
+    if (lotA !== lotB) return lotA - lotB;
+    return spotA - spotB;
+  });
+});
+
+const firstAvailable = computed(() =>
+  sortedSpots.value.find(spot => spot.status === "available")
+);
+
 const form = reactive({
   username: auth.user?.username || "",
   lot_id: props.lot.id,
-  spot_number: props.lot.parking_spots.find(spot => spot.status === "available")?.spot_number || "N/A",
-  spot_id: props.lot.parking_spots.find(spot => spot.status === "available")?.id || "N/A",
+  spot_number: firstAvailable.value?.spot_number || "N/A",
+  spot_id: firstAvailable.value?.id || "N/A",
   fuel_type: "",
   vehicle_number: "",
   brand: "",

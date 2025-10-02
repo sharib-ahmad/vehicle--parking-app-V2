@@ -122,11 +122,11 @@
             <div class="modal-body" v-if="selectedReservation">
                 <p><strong>Spot Number:</strong> {{ selectedReservation.parking_spot.spot_number }}</p>
                 <p><strong>Username:</strong> {{ auth.user.username }}</p>
-                <p><strong>Parking Rate:</strong> ${{ selectedReservation.parking_cost_per_hour }}/hour</p>
+                <p><strong>Parking Rate:</strong> ₹{{ selectedReservation.parking_cost_per_hour }}/hour</p>
                 <hr>
                 <p><strong>Parking Time:</strong> {{ formatTimestampToIST(selectedReservation.parking_timestamp) }}</p>
                 <p><strong>Leaving Time:</strong> {{ formatTimestampToIST(leavingTime) }}</p>
-                <h5 class="mt-3"><strong>Total Cost:</strong> ${{ totalCost(selectedReservation).toFixed(2) }}</h5>
+                <h5 class="mt-3"><strong>Total Cost:</strong> ₹{{ totalCost(selectedReservation).toFixed(2) }}</h5>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" @click="closeReleaseModal">Cancel</button>
@@ -135,45 +135,11 @@
         </div>
     </div>
   </div>
-
-  <!-- Payment Simulation Page -->
-  <div v-if="showPaymentPage" class="payment-overlay">
-      <div class="payment-card">
-          <h4>Payment Gateway</h4>
-          <p>Processing payment for <strong>${{ totalCost(selectedReservation).toFixed(2) }}</strong></p>
-          
-          <div class="my-4 text-start">
-            <h6 class="mb-3 fw-semibold">Select Payment Method:</h6>
-            <div class="form-check">
-                <input class="form-check-input" type="radio" name="paymentMethod" id="creditCard" value="Credit Card" v-model="selectedPaymentMethod">
-                <label class="form-check-label" for="creditCard">
-                    Credit Card
-                </label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="radio" name="paymentMethod" id="debitCard" value="Debit Card" v-model="selectedPaymentMethod">
-                <label class="form-check-label" for="debitCard">
-                    Debit Card
-                </label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="radio" name="paymentMethod" id="upi" value="UPI" v-model="selectedPaymentMethod">
-                <label class="form-check-label" for="upi">
-                    UPI
-                </label>
-            </div>
-          </div>
-
-          <div class="mt-4">
-              <button class="btn btn-success me-2" @click="handlePaymentConfirmation(true)">Confirm Payment</button>
-              <button class="btn btn-danger" @click="handlePaymentConfirmation(false)">Cancel Payment</button>
-          </div>
-      </div>
-  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import BookingModal from './BookingModal.vue';
@@ -181,6 +147,7 @@ import { formatTimestampToIST, formatTime } from '@/utils/formatters';
 import { totalCost } from '@/utils/totalCost';
 
 const auth = useAuthStore();
+const router = useRouter();
 const searchQuery = ref('');
 const initialSearchQuery = ref('');
 const searchResults = ref([]);
@@ -194,10 +161,6 @@ const selectedLot = ref(null);
 const showReleaseModal = ref(false);
 const selectedReservation = ref(null);
 const leavingTime = ref(null);
-
-const showPaymentPage = ref(false);
-const selectedPaymentMethod = ref('Credit Card');
-
 
 const searchLots = async () => {
   if (!searchQuery.value) return;
@@ -219,7 +182,6 @@ const searchLots = async () => {
 const fetchReservations = async () => {
   try {
     const response = await api.get(`/users/reservations`);
-    // Assuming API returns reservations sorted by most recent
     reservations.value = response.data.sort((a,b)=>{
       if (a.status === 'active' && b.status !=='active'){
         return -1;
@@ -279,39 +241,18 @@ const closeReleaseModal = () => {
 };
 
 const proceedToPayment = () => {
-    showReleaseModal.value = false;
-    showPaymentPage.value = true;
+  const reservation = selectedReservation.value;
+  if (reservation) {
+    const cost = totalCost(reservation).toFixed(2);
+    // Navigate to the new payment page with necessary details in query params
+    router.push({
+      name: 'PaymentPage',
+      params: { reservationId: reservation.id },
+      query: { amount: cost, leavingTimestamp: leavingTime.value.toISOString() }
+    });
+  }
+  closeReleaseModal();
 };
-
-const handlePaymentConfirmation = async (isSuccess) => {
-    if (isSuccess) {
-        try {
-            // Create a payment record based on the new Payment model
-            await api.post('users/payments', {
-                reservation_id: selectedReservation.value.id,
-                amount: totalCost(selectedReservation.value).toFixed(2),
-                payment_method: selectedPaymentMethod.value,
-            });
-
-            // Mark the reservation as complete
-            await api.put(`users/reservations?res_id=${selectedReservation.value.id}`, {
-                leaving_timestamp: leavingTime.value.toISOString(),
-            });
-            // Refresh reservations to show 'Parked Out'
-            await fetchReservations();
-        } catch (error) {
-            console.error("Failed to process payment or update reservation:", error);
-            // Here you might want to show an error message to the user
-        }
-    }
-    // else, the payment was cancelled, so we just close the payment page and do nothing (rollback)
-    
-    showPaymentPage.value = false;
-    // Reset selection regardless of payment outcome
-    selectedReservation.value = null;
-    leavingTime.value = null;
-};
-
 
 onMounted(() => {
   myData();
@@ -323,38 +264,8 @@ onMounted(() => {
 .btn:disabled {
   cursor: not-allowed;
 }
-
 .recent-bookings {
     max-height: 400px;
     overflow-y: auto;
 }
-
-.payment-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1060;
-}
-
-.payment-card {
-    background: white;
-    padding: 2rem;
-    border-radius: 8px;
-    text-align: center;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    width: 90%;
-    max-width: 400px;
-}
-
-.text-start {
-    text-align: left !important;
-}
 </style>
-
-
