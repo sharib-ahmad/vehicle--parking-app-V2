@@ -1,12 +1,13 @@
 from flask import request
-from flask_restx import Resource, Namespace, abort
+from flask_restx import Resource, Namespace, abort, fields
 from flask_jwt_extended import jwt_required, current_user
 from models import (
     db,
     ParkingLot,parking_lot_get_model, parking_lot_put_model,
     ParkingSpot, SpotStatus, parking_lot_post_model,
     ReservedParkingSpot,reservation_get_model,ReservationStatus,
-    User, Vehicle,display_user_model, vehicle_model
+    User, Vehicle,display_user_model, vehicle_model,
+    Payment, PaymentStatus  # Import Payment model and status
     )
 from functools import wraps
 from datetime import datetime
@@ -35,14 +36,11 @@ def parse_time(time_str: str):
     """
     if not time_str:
         return None
-    # List of formats to try, from most specific to least specific.
     for fmt in ("%H:%M:%S.%f", "%H:%M:%S", "%H:%M"):
         try:
             return datetime.strptime(time_str, fmt).time()
         except ValueError:
-            # If the format doesn't match, continue to the next one.
             continue
-    # If no formats match, abort with a clear error message.
     abort(400, f"Invalid time format for '{time_str}'. Please use HH:MM or HH:MM:SS format.")
 
 # --- Models for Swagger Documentation ---
@@ -53,8 +51,17 @@ reservation_get_model = reservation_get_model(admin_ns)
 display_user_model = display_user_model(admin_ns)
 vehicle_model = vehicle_model(admin_ns)
 
+# New model for the payment summary
+payment_summary_model = admin_ns.model('PaymentSummary', {
+    'paid': fields.Integer(description='Total number of paid transactions'),
+    'pending': fields.Integer(description='Total number of pending transactions')
+})
 
-
+# New model for the combined summary response
+summary_response_model = admin_ns.model('SummaryResponse', {
+    'lots': fields.List(fields.Nested(parking_lot_get_model)),
+    'payment_summary': fields.Nested(payment_summary_model)
+})
 
 
 # --- Service Layer for Business Logic ---
@@ -87,7 +94,7 @@ class AdminServices:
                 close_time=parse_time(data.get('close_time')),
             )
             db.session.add(new_lot)
-            db.session.flush()  # Flush to get the new_lot.id
+            db.session.flush()
 
             for i in range(1, new_lot.maximum_number_of_spots + 1):
                 spot = ParkingSpot(spot_number=f"{new_lot.id}-{i}", lot_id=new_lot.id)
@@ -96,7 +103,6 @@ class AdminServices:
             db.session.commit()
             return new_lot
         except HTTPException:
-            # Re-raise intentional HTTP exceptions (like from parse_time)
             raise
         except Exception as e:
             db.session.rollback()
@@ -114,18 +120,14 @@ class AdminServices:
             if new_spots < occupied_count:
                 abort(400, f"Cannot reduce spots to {new_spots}. At least {occupied_count} spots are currently occupied.")
 
-            # Adjust parking spots if the number has changed
             if new_spots < current_spots:
-                # Shrink: Delete available spots from the end
                 spots_to_delete = lot.parking_spots.filter_by(status=SpotStatus.AVAILABLE).order_by(ParkingSpot.id.desc()).limit(current_spots - new_spots)
                 for spot in spots_to_delete:
                     db.session.delete(spot)
             elif new_spots > current_spots:
                 ava_spot_num = [int(spot.spot_number.split('-')[1])
-                                 for spot in lot.parking_spots
-                                   if spot.status == SpotStatus.AVAILABLE]
+                                 for spot in lot.parking_spots]
                
-                # Grow: Add new spots
                 for i in range(1, new_spots + 1):
                     if i in ava_spot_num:
                         continue
@@ -133,7 +135,6 @@ class AdminServices:
                     spot = ParkingSpot(spot_number=f"{lot.id}-{i}", lot_id=lot.id)
                     db.session.add(spot)
             
-            # Update lot details
             lot.price_per_hour = data['price_per_hour']
             lot.maximum_number_of_spots = new_spots
             lot.open_time = parse_time(data.get('open_time'))
@@ -142,7 +143,6 @@ class AdminServices:
             db.session.commit()
             return lot
         except HTTPException:
-            # Re-raise intentional HTTP exceptions (like our abort calls)
             raise
         except Exception as e:
             db.session.rollback()
@@ -160,7 +160,6 @@ class AdminServices:
             db.session.delete(lot)
             db.session.commit()
         except HTTPException:
-            # Re-raise intentional HTTP exceptions
             raise
         except Exception as e:
             db.session.rollback()
@@ -175,14 +174,12 @@ class AdminServices:
     @staticmethod
     def delete_spot(spot_id):
         """Delete spot by spot_id"""
-
         try:
             spot = ParkingSpot.query.filter_by(id=spot_id).first()
             spot.parking_lot.maximum_number_of_spots -= 1
             db.session.delete(spot)
             db.session.commit()
         except HTTPException:
-            # Re-raise intentional HTTP exceptions
             raise
         except Exception as e:
             db.session.rollback()
@@ -219,11 +216,27 @@ class AdminServices:
 
         abort(400, f"Invalid search parameter '{param_key}' for type '{search_type}'.")
 
+    @staticmethod
+    def get_summary_data():
+        """Aggregates data for the summary dashboard including payment statuses."""
+        lots_data = ParkingLot.query.all()
+        
+        paid_count = Payment.query.filter_by(payment_status=PaymentStatus.PAID).count()
+        pending_count = Payment.query.filter_by(payment_status=PaymentStatus.PENDING).count()
+        
+        payment_summary = {
+            "paid": paid_count,
+            "pending": pending_count
+        }
+        
+        return {
+            "lots": lots_data,
+            "payment_summary": payment_summary
+        }
 
 # --- API Endpoints ---
 @admin_ns.route('/parking-lots')
 class ParkingLotListResource(Resource):
-
     @admin_ns.marshal_list_with(parking_lot_get_model)
     def get(self):
         """Get a list of all parking lots."""
@@ -237,11 +250,9 @@ class ParkingLotListResource(Resource):
         data = request.get_json()
         return AdminServices.create_lot(data), 201
 
-# FIX: Added '/parking-lot/<int:lot_id>' to handle both singular and plural URLs
 @admin_ns.route('/parking-lot/<int:lot_id>')
 @admin_ns.param('lot_id', 'The unique identifier of the parking lot')
 class ParkingLotResource(Resource):
-
     @admin_ns.marshal_with(parking_lot_get_model)
     def get(self, lot_id):
         """Get details of a specific parking lot."""
@@ -311,4 +322,13 @@ class SearchResource(Resource):
             return admin_ns.marshal(results, vehicle_model)
 
         return [], 200
+
+@admin_ns.route('/summary')
+class SummaryResource(Resource):
+    
+    @admin_required
+    @admin_ns.marshal_with(summary_response_model)
+    def get(self):
+        """Get summary data for the admin dashboard."""
+        return AdminServices.get_summary_data()
 

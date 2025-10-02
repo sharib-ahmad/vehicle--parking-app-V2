@@ -1,6 +1,6 @@
 from flask import request
-from datetime import datetime
-from flask_restx import Resource, Namespace, abort
+from datetime import datetime, timedelta
+from flask_restx import Resource, Namespace, abort, fields
 from flask_jwt_extended import jwt_required, current_user
 from models import ( 
     db ,
@@ -12,6 +12,7 @@ from models import (
     Payment, payment_post_model, PaymentStatus
     )
 from sqlalchemy import or_
+from collections import Counter
 from .admin import admin_required # Import the decorator
 
 # --- Setup ---
@@ -25,6 +26,18 @@ reservation_post_model = reservation_post_model(user_ns)
 reservation_get_model = reservation_get_model(user_ns)
 reservation_put_model = reservation_put_model(user_ns)
 payment_post_model = payment_post_model(user_ns)
+
+# Models for the new user summary endpoint
+favorite_spots_model = user_ns.model('FavoriteSpots', {
+    'lot_name': fields.String,
+    'spot_number': fields.String
+})
+
+user_summary_model = user_ns.model('UserSummary', {
+    'monthly_bookings': fields.Raw(description="Bookings over the last 3 months"),
+    'favorite_lots': fields.Raw(description="Most frequently used lots"),
+    'favorite_spots': fields.List(fields.Nested(favorite_spots_model))
+})
 
 
 # --- Service Layer for User Logic ---
@@ -119,6 +132,8 @@ class UserService:
         reservation.leaving_timestamp = datetime.fromisoformat(data['leaving_timestamp'].replace('Z', '+00:00'))
         reservation.status = ReservationStatus.COMPLETED
         reservation.parking_spot.status = SpotStatus.AVAILABLE
+        reservation.parking_spot.revenue += reservation.parking_cost_per_hour
+        reservation.parking_spot.parking_lot.revenue += reservation.parking_cost_per_hour
         db.session.commit()
     
     @staticmethod
@@ -134,6 +149,40 @@ class UserService:
         payment.payment_status = PaymentStatus.PAID
         db.session.add(payment)
         db.session.commit()
+
+    @staticmethod
+    def get_user_summary():
+        """
+        Generates summary data for the current user's dashboard over the last 3 months.
+        """
+        three_months_ago = datetime.utcnow() - timedelta(days=90)
+        
+        reservations = ReservedParkingSpot.query.filter(
+            ReservedParkingSpot.user_id == current_user.id,
+            ReservedParkingSpot.parking_timestamp >= three_months_ago
+        ).all()
+
+        # Monthly bookings for the last 3 months
+        monthly_counts = Counter(res.parking_timestamp.strftime('%B') for res in reservations)
+        
+        # Favorite lots
+        lot_locations = [res.parking_spot.parking_lot.prime_location_name for res in reservations if res.parking_spot and res.parking_spot.parking_lot]
+        favorite_lots = Counter(lot_locations)
+
+        # Favorite spots in favorite lots
+        top_lots = [lot[0] for lot in favorite_lots.most_common(5)]
+        favorite_spots_data = []
+        for lot_name in top_lots:
+            spots_in_lot = [res.parking_spot.spot_number for res in reservations if res.parking_spot and res.parking_spot.parking_lot.prime_location_name == lot_name]
+            if spots_in_lot:
+                most_common_spot = Counter(spots_in_lot).most_common(1)[0][0]
+                favorite_spots_data.append({"lot_name": lot_name, "spot_number": most_common_spot})
+
+        return {
+            "monthly_bookings": dict(monthly_counts),
+            "favorite_lots": dict(favorite_lots.most_common(5)),
+            "favorite_spots": favorite_spots_data
+        }
 
     
 # --- API Endpoints ---
@@ -214,3 +263,12 @@ class PaymentsResource(Resource):
         data = request.get_json()
         UserService.process_payment(data)
         return {'message': 'Payment processed successfully'}, 200
+
+@user_ns.route('/summary')
+class UserSummaryResource(Resource):
+    @jwt_required()
+    @user_ns.marshal_with(user_summary_model)
+    def get(self):
+        """Get summary data for the current user."""
+        return UserService.get_user_summary()
+

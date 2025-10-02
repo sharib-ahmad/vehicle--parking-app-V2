@@ -1,3 +1,5 @@
+# Token Based Authentication
+
 from models import User, TokenBlocklist
 from flask_jwt_extended import JWTManager
 import uuid
