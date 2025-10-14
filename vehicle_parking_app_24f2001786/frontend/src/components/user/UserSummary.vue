@@ -1,8 +1,18 @@
 <template>
   <div class="container py-5 mt-4">
-    <header class="pb-3 mb-4 border-bottom">
-      <h1 class="h2">My Parking Summary</h1>
-      <p class="text-muted">An overview of your parking history and expenses.</p>
+    <header class="d-flex justify-content-between align-items-center pb-3 mb-4 border-bottom">
+      <div>
+        <h1 class="h2">My Parking Summary</h1>
+        <p class="text-muted mb-0">An overview of your parking history and expenses.</p>
+      </div>
+      <button 
+        class="btn btn-primary" 
+        @click="triggerCsvExport" 
+        :disabled="isExporting">
+        <span v-if="isExporting" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <span v-if="isExporting"> Exporting...</span>
+        <span v-else>Download CSV Report</span>
+      </button>
     </header>
 
     <div v-if="isLoading" class="text-center py-5">
@@ -57,6 +67,7 @@ const notification = useNotificationStore();
 const summaryData = ref(null);
 const isLoading = ref(true);
 const error = ref(null);
+const isExporting = ref(false); // For the export button loading state
 
 // Template refs
 const monthlyBookingsCanvas = ref(null);
@@ -82,6 +93,25 @@ const fetchSummaryData = async () => {
     notification.showNotification({ type: 'error', text: '❌ Failed to fetch your summary.' });
   } finally {
     isLoading.value = false;
+  }
+};
+
+const triggerCsvExport = async () => {
+  isExporting.value = true;
+  try {
+    // This calls the POST /users/export-csv endpoint
+    await api.post('/users/export-csv');
+    notification.showNotification({ 
+      type: 'success', 
+      text: '✅ Export started! Your report will be emailed to you shortly.' 
+    });
+  } catch (err) {
+    notification.showNotification({ 
+      type: 'error', 
+      text: '❌ Failed to start the export. Please try again.' 
+    });
+  } finally {
+    isExporting.value = false;
   }
 };
 
