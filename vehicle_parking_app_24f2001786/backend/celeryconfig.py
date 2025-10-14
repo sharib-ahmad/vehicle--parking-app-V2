@@ -24,6 +24,10 @@ beat_schedule = {
             'task': 'tasks.send_monthly_report',
             'schedule': crontab(minute=0, hour=9, day_of_month=1, month_of_year='*'),
         },
+        'cleanup-expired-tokens': {
+            'task': 'tasks.cleanup_expired_tokens',
+            'schedule': crontab(hour=2, minute=30, day_of_week=0),  # Sunday
+        },
         # # Optional: Test job that runs every minute (for testing purposes)
         # # Remove or comment out in production
         # 'test-job-every-minute': {

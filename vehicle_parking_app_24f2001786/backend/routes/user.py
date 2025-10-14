@@ -13,7 +13,8 @@ from models import (
     )
 from sqlalchemy import or_
 from collections import Counter
-from .admin import admin_required # Import the decorator
+from .admin import admin_required 
+from routes import cache # Import the cache object
 
 # --- Setup ---
 user_ns = Namespace('users', description='User related operations')
@@ -46,6 +47,7 @@ class UserService:
     def get_current_user():
         """
         Retrieves the user object associated with the current JWT.
+        (No caching needed here as it's handled by current_user proxy per request)
         """
         if not current_user:
             abort(401, "Unauthorized: No valid user session found.")
@@ -56,7 +58,6 @@ class UserService:
         """
         Retrieves a list of all non-admin users.
         """
-        # Exclude admins from the user list to prevent self-management issues
         return User.query.filter(User.role != UserRole.ADMIN).order_by(User.full_name).all()
     
     @staticmethod
@@ -71,9 +72,13 @@ class UserService:
                 ParkingLot.address.like(f"%{search_query}%")
             )
         ).all()
+
     @staticmethod
-    def get_register_vehicle_details(data):
-        vehicle = Vehicle.query.filter_by(vehicle_number=data['vehicle_number']).first()
+    def get_register_vehicle_details(vehicle_number):
+        """
+        Retrieves vehicle details by vehicle number.
+        """
+        vehicle = Vehicle.query.filter_by(vehicle_number=vehicle_number).first()
         if not vehicle:
             abort(404, 'No vehicle registered with this vehicle number.')
         return vehicle
@@ -100,7 +105,6 @@ class UserService:
             )
             db.session.add(new_vehicle)
         
-
         reservation = ReservedParkingSpot(
             user_id=current_user.id,
             vehicle_number=data['vehicle_number'],
@@ -110,6 +114,8 @@ class UserService:
         )
         db.session.add(reservation)
         db.session.commit()
+        # Invalidate the current user's summary cache since they made a new booking
+        cache.delete_memoized(UserService.get_user_summary, current_user.id)
     
     @staticmethod
     def get_all_reservations():
@@ -135,6 +141,8 @@ class UserService:
         reservation.parking_spot.revenue += reservation.parking_cost_per_hour
         reservation.parking_spot.parking_lot.revenue += reservation.parking_cost_per_hour
         db.session.commit()
+        # Invalidate the current user's summary cache since their reservation history changed
+        cache.delete_memoized(UserService.get_user_summary, current_user.id)
     
     @staticmethod
     def process_payment(data):
@@ -149,27 +157,26 @@ class UserService:
         payment.payment_status = PaymentStatus.PAID
         db.session.add(payment)
         db.session.commit()
+        # Invalidate the current user's summary cache in case payment affects summary data
+        cache.delete_memoized(UserService.get_user_summary, current_user.id)
 
     @staticmethod
-    def get_user_summary():
+    @cache.memoize(timeout=900) # Cache per user for 15 minutes
+    def get_user_summary(user_id):
         """
-        Generates summary data for the current user's dashboard over the last 3 months.
+        Generates summary data for a specific user's dashboard over the last 3 months.
         """
         three_months_ago = datetime.utcnow() - timedelta(days=90)
         
         reservations = ReservedParkingSpot.query.filter(
-            ReservedParkingSpot.user_id == current_user.id,
+            ReservedParkingSpot.user_id == user_id,
             ReservedParkingSpot.parking_timestamp >= three_months_ago
         ).all()
 
-        # Monthly bookings for the last 3 months
         monthly_counts = Counter(res.parking_timestamp.strftime('%B') for res in reservations)
-        
-        # Favorite lots
         lot_locations = [res.parking_spot.parking_lot.prime_location_name for res in reservations if res.parking_spot and res.parking_spot.parking_lot]
         favorite_lots = Counter(lot_locations)
 
-        # Favorite spots in favorite lots
         top_lots = [lot[0] for lot in favorite_lots.most_common(5)]
         favorite_spots_data = []
         for lot_name in top_lots:
@@ -196,7 +203,8 @@ class MeResource(Resource):
 
 @user_ns.route('/')
 class UserListResource(Resource):
-    @admin_required # Protect this endpoint
+    @admin_required
+    @cache.cached(timeout=300) # Cache this list for 5 minutes
     @user_ns.marshal_list_with(display_user_model)
     def get(self):
         """Get a list of all users (Admin only)."""
@@ -205,24 +213,23 @@ class UserListResource(Resource):
 @user_ns.route('/search')
 class ParkingSearchResource(Resource):
     @jwt_required()
+    @cache.cached(timeout=120, query_string=True) # Cache based on query parameters for 2 minutes
     @user_ns.marshal_list_with(parking_lot_get_model)
     def get(self):
         """Search for available parking lots by pincode or location."""
         query = request.args.get('q', '')
         if not query:
             abort(400, "A search query ('q' parameter) is required.")
-        lots = UserService.find_parking_lots(query)
-        # Manually serialize to include available spots count
-        return lots, 200
+        return UserService.find_parking_lots(query)
     
 @user_ns.route('/booking/<string:vehicle_number>')
 class BookingResourceGet(Resource):
-
     @jwt_required()
+    @cache.cached(timeout=300) # Cache vehicle details for 5 minutes
     @user_ns.marshal_with(vehicle_model)
     def get(self, vehicle_number):
         """Get details of a specific vehicle."""
-        return UserService.get_register_vehicle_details({'vehicle_number': vehicle_number}), 200
+        return UserService.get_register_vehicle_details(vehicle_number)
     
 @user_ns.route('/booking_spot')
 class BookingResourcePost(Resource):
@@ -255,7 +262,6 @@ class ReservationsResource(Resource):
     
 @user_ns.route('/payments')
 class PaymentsResource(Resource):
-
     @jwt_required()
     @user_ns.expect(payment_post_model)
     def post(self):
@@ -270,10 +276,10 @@ class UserSummaryResource(Resource):
     @user_ns.marshal_with(user_summary_model)
     def get(self):
         """Get summary data for the current user."""
-        return UserService.get_user_summary()
+        # The service method is memoized, so this will hit the cache
+        return UserService.get_user_summary(current_user.id)
     
-from celery.result import AsyncResult
-from tasks import send_daily_reminders, send_monthly_report, export_user_parking_data_to_csv
+from tasks.reports import export_user_parking_data_to_csv
 
 @user_ns.route('/export-csv')
 class ExportDataResource(Resource):
@@ -281,11 +287,11 @@ class ExportDataResource(Resource):
     def post(self):
         """Trigger an asynchronous export of the user's parking data to CSV."""
         try:
-            # Pass the user's ID as a string to the Celery task
             task = export_user_parking_data_to_csv.delay(current_user.id)
             return {
                 'message': 'Your data export has started. You will receive an email with the CSV file shortly.',
                 'task_id': task.id
-            }, 202  # HTTP 202 Accepted indicates the request has been accepted for processing
+            }, 202
         except Exception as e:
             abort(500, f"Failed to start the export task: {e}")
+

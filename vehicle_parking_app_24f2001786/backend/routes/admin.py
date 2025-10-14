@@ -7,12 +7,13 @@ from models import (
     ParkingSpot, SpotStatus, parking_lot_post_model,
     ReservedParkingSpot,reservation_get_model,ReservationStatus,
     User, Vehicle,display_user_model, vehicle_model,
-    Payment, PaymentStatus  # Import Payment model and status
+    Payment, PaymentStatus
     )
 from functools import wraps
 from datetime import datetime
 from werkzeug.exceptions import HTTPException
 import uuid
+from routes import cache # Import the cache object
 
 # --- Setup ---
 admin_ns = Namespace('admin', description='Admin related operations for managing parking lots')
@@ -101,6 +102,7 @@ class AdminServices:
                 db.session.add(spot)
             
             db.session.commit()
+            cache.clear() # Clear cache after creating a lot
             return new_lot
         except HTTPException:
             raise
@@ -141,6 +143,7 @@ class AdminServices:
             lot.close_time = parse_time(data.get('close_time'))
             
             db.session.commit()
+            cache.clear() # Clear cache after updating a lot
             return lot
         except HTTPException:
             raise
@@ -159,6 +162,7 @@ class AdminServices:
         try:
             db.session.delete(lot)
             db.session.commit()
+            cache.clear() # Clear cache after deleting a lot
         except HTTPException:
             raise
         except Exception as e:
@@ -179,6 +183,7 @@ class AdminServices:
             spot.parking_lot.maximum_number_of_spots -= 1
             db.session.delete(spot)
             db.session.commit()
+            cache.clear() # Clear cache after deleting a spot
         except HTTPException:
             raise
         except Exception as e:
@@ -217,6 +222,7 @@ class AdminServices:
         abort(400, f"Invalid search parameter '{param_key}' for type '{search_type}'.")
 
     @staticmethod
+    @cache.cached(timeout=300, key_prefix='admin_summary') # Cache for 5 minutes
     def get_summary_data():
         """Aggregates data for the summary dashboard including payment statuses."""
         lots_data = ParkingLot.query.all()
@@ -327,6 +333,7 @@ class SearchResource(Resource):
 class SummaryResource(Resource):
     
     @admin_required
+    @cache.cached(timeout=300) # Cache this response for 5 minutes
     @admin_ns.marshal_with(summary_response_model)
     def get(self):
         """Get summary data for the admin dashboard."""
