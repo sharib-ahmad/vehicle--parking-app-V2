@@ -19,6 +19,9 @@ instance/
 *.pyc
 *.pyo
 *.pyd
+*.rdb
+*.s3db
+*.sqlite
 
 # Logs
 *.log

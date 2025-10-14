@@ -271,4 +271,21 @@ class UserSummaryResource(Resource):
     def get(self):
         """Get summary data for the current user."""
         return UserService.get_user_summary()
+    
+from celery.result import AsyncResult
+from tasks import send_daily_reminders, send_monthly_report, export_user_parking_data_to_csv
 
+@user_ns.route('/export-csv')
+class ExportDataResource(Resource):
+    @jwt_required()
+    def post(self):
+        """Trigger an asynchronous export of the user's parking data to CSV."""
+        try:
+            # Pass the user's ID as a string to the Celery task
+            task = export_user_parking_data_to_csv.delay(current_user.id)
+            return {
+                'message': 'Your data export has started. You will receive an email with the CSV file shortly.',
+                'task_id': task.id
+            }, 202  # HTTP 202 Accepted indicates the request has been accepted for processing
+        except Exception as e:
+            abort(500, f"Failed to start the export task: {e}")

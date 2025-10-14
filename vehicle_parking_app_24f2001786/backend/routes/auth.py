@@ -10,6 +10,7 @@ from flask_jwt_extended import (
     current_user,
 )
 from models import User, UserRole, TokenBlocklist, user_register_model, user_login_model, db, display_user_model
+from tasks import send_welcome_email
 
 # --- Setup ---
 auth_ns = Namespace('auth', description='Authentication related operations')
@@ -42,6 +43,7 @@ class AuthService:
             )
             db.session.add(new_user)
             db.session.commit()
+            send_welcome_email.delay(data['email'])
             return new_user
         except Exception as e:
             db.session.rollback()

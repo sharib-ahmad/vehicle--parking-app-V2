@@ -15,13 +15,16 @@ class Config:
     JWT_TOKEN_LOCATION = ["headers", "cookies"]
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
-    # Enable CSRF protection globally as it's a critical security feature.
     JWT_COOKIE_CSRF_PROTECT = True
+
+    SMTP_SERVER_HOST = os.getenv("SMTP_SERVER_HOST", "localhost")
+    SMTP_SERVER_PORT = int(os.getenv("SMTP_SERVER_PORT", 1025))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+    SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+    SENDER_ADDRESS = os.getenv("SENDER_ADDRESS")
 
 class LocalDevelopmentConfig(Config):
     """Development configuration."""
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
-    # In development, cookies can be sent over HTTP.
     JWT_COOKIE_SECURE = False 
-
