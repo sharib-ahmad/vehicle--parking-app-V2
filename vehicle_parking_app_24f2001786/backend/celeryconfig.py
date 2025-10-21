@@ -17,7 +17,7 @@ beat_schedule = {
         # Daily Reminder - Runs every day at 8:00 AM
         'send-daily-reminders': {
             'task': 'tasks.send_daily_reminders',
-            'schedule': crontab(hour=8, minute=0),
+            'schedule': crontab(hour=16, minute=30),
         },
         # Monthly Report - Runs on the 1st of every month at 9:00 AM
         'send-monthly-report': {
