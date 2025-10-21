@@ -7,7 +7,7 @@
       <!-- Brand/Logo -->
        <div class="navbar-logo">
       <router-link to="/" class="navbar-brand d-flex align-items-center">
-        <img src="@/assets/logo.png"  alt="Car" class="logo-img">
+        <img src="@/assets/logo.webp"  alt="Car" class="logo-img">
         <span class="fw-bold">ParkEase</span>
       </router-link>
       </div>
