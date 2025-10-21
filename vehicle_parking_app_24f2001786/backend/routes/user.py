@@ -54,6 +54,23 @@ class UserService:
         return current_user
 
     @staticmethod
+    def update_profile(user_id, data):
+        """
+        Updates the profile of the currently logged-in user.
+        """
+        user = User.query.get(user_id)
+        if not user:
+            abort(404, 'User not found.')
+        
+        user.full_name = data.get('full_name', user.full_name)
+        user.phone_number = data.get('phone_number', user.phone_number)
+        user.address = data.get('address', user.address)
+        user.pincode = data.get('pincode', user.pincode)
+        db.session.commit()
+        return user
+        
+
+    @staticmethod
     def get_all_users():
         """
         Retrieves a list of all non-admin users.
@@ -200,6 +217,14 @@ class MeResource(Resource):
     def get(self):
         """Get the profile of the currently logged-in user."""
         return UserService.get_current_user()
+    
+    @jwt_required()
+    @user_ns.marshal_with(display_user_model)
+    def put(self):
+        """Update the profile of the currently logged-in user."""
+        data = request.get_json()
+        return UserService.update_profile(current_user.id, data)
+
 
 @user_ns.route('/')
 class UserListResource(Resource):

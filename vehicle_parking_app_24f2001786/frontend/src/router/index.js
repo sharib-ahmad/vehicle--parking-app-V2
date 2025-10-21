@@ -9,6 +9,7 @@ import UserManagement from '@/components/admin/UserManagement.vue'
 import UserDashboard from '@/components/user/UserDashboard.vue'
 import UserSummary from '@/components/user/UserSummary.vue'
 import PaymentPage from '@/components/user/PaymentPage.vue'
+import UserProfile from '@/components/user/UserProfile.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 
@@ -72,6 +73,12 @@ const routes = [
     component: PaymentPage,
     props: true,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'UserProfile',
+    component: UserProfile,
+    meta: { requiresAuth: true } // Good practice to protect the route
   },
 ]
 
