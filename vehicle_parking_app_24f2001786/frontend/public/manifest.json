@@ -1,0 +1,21 @@
+{
+  "short_name": "Parking App",
+  "name": "Vehicle Parking Finder",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.webp",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512x512.webp",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FFFFFF",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#007BFF"
+}
