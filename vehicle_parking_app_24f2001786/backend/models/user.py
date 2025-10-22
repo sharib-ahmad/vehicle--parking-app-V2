@@ -35,9 +35,6 @@ class User(db.Model):
     vehicles = db.relationship(
         "Vehicle", back_populates="user", cascade="all, delete-orphan"
     )
-    profile = db.relationship(
-        "UserProfile", back_populates="user", uselist=False, cascade="all, delete"
-    )
     # Password handling
     @property
     def password(self):

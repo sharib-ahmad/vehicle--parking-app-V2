@@ -11,7 +11,6 @@ class EnumField(fields.Raw):
 
 
 from .user import User, UserRole, user_register_model, user_login_model, display_user_model
-from .userProfile import UserProfile
 from .parkingSpot import ParkingSpot, parking_spot_get_model, SpotStatus
 from .parkingLot import ParkingLot, parking_lot_get_model, parking_lot_post_model, parking_lot_put_model
 from .reservation import ReservedParkingSpot, reservation_post_model, reservation_get_model, reservation_put_model, ReservationStatus
