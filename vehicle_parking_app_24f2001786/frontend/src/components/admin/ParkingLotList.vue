@@ -62,10 +62,10 @@
             <div class="modal-body" v-if="reservationInfo">
                 <p><strong>Spot Number:</strong> {{ reservationInfo.parking_spot.spot_number }}</p>
                 <p><strong>Username:</strong> {{ reservationInfo.user.username }}</p>
-                <p><strong>Parking Rate:</strong> ${{ reservationInfo.parking_cost_per_hour }}/hour</p>
+                <p><strong>Parking Rate:</strong> ₹{{ reservationInfo.parking_cost_per_hour }}/hour</p>
                 <hr>
                 <p><strong>Parking Time:</strong> {{ formatTimestampToIST(reservationInfo.parking_timestamp) }}</p>
-                <h5 class="mt-3"><strong>Est. Parking Cost:</strong> ${{ totalCost(reservationInfo).toFixed(2) }}</h5>
+                <h5 class="mt-3"><strong>Est. Parking Cost:</strong> ₹{{ totalCost(reservationInfo).toFixed(2) }}</h5>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" @click="showStatusModal = false">Back</button>
